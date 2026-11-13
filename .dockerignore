@@ -1,0 +1,14 @@
+.git
+.github
+.env
+.nvmrc
+data
+logs
+backups
+test
+docs
+deploy
+*.bak
+.playwright-cli
+.taste-skill
+node_modules

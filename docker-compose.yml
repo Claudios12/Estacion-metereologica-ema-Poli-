@@ -1,0 +1,17 @@
+# Uso:  docker compose up -d --build        (la página queda en http://localhost:8080)
+# Detrás de un proxy inverso con HTTPS, cambia TRUST_PROXY a "true" y no publiques el puerto al exterior.
+services:
+  poli-clima:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      TRUST_PROXY: "false"
+      LOG_LEVEL: info
+      # COLLECT_INTERVAL_MS: 300000
+    volumes:
+      - poli-data:/data
+
+volumes:
+  poli-data:

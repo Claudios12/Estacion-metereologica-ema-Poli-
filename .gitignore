@@ -1,0 +1,10 @@
+# Datos y configuración local (no se suben al repositorio)
+data/
+logs/
+.env
+*.bak
+backups/
+
+# Archivos temporales de herramientas de prueba y diseño
+.playwright-cli/
+.taste-skill/

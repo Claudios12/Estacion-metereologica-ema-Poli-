@@ -1,0 +1,29 @@
+# Servicio systemd para Linux.
+#   sudo useradd --system --home /opt/poli-clima --shell /usr/sbin/nologin poli-clima
+#   sudo mkdir -p /opt/poli-clima /var/lib/poli-clima && sudo chown poli-clima: /var/lib/poli-clima
+#   (copiar package.json, server.mjs e index.html a /opt/poli-clima y la configuración a /etc/poli-clima.env)
+#   sudo cp deploy/poli-clima.service /etc/systemd/system/ && sudo systemctl enable --now poli-clima
+[Unit]
+Description=Poli Clima
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=poli-clima
+WorkingDirectory=/opt/poli-clima
+EnvironmentFile=/etc/poli-clima.env
+ExecStart=/usr/bin/node server.mjs
+Restart=always
+RestartSec=5
+
+# Endurecimiento: el servicio solo puede escribir en su carpeta de datos.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/poli-clima
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

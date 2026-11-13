@@ -1,0 +1,19 @@
+{
+  "name": "poli-clima",
+  "version": "1.0.0",
+  "description": "Clima del campus del Politécnico Grancolombiano a partir de su estación meteorológica (WeatherLink), con recomendaciones para la comunidad y un histórico para análisis.",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node scripts/iniciar.mjs",
+    "start:directo": "node server.mjs",
+    "start:env": "node --env-file=.env server.mjs",
+    "test": "node --test \"test/*.test.mjs\"",
+    "backup": "node scripts/backup.mjs",
+    "crear-clave": "node scripts/crear-clave.mjs"
+  }
+}
