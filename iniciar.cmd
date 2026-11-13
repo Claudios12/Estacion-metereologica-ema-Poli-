@@ -21,7 +21,7 @@ set CODIGO=%ERRORLEVEL%
 
 echo.
 if "%CODIGO%"=="0" (
-  echo   Poli Clima se detuvo.
+  echo   Listo. Puede cerrar esta ventana.
 ) else (
   echo   Poli Clima se detuvo con un error. Lea el mensaje de arriba.
 )

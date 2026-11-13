@@ -146,6 +146,7 @@ Eventos que conviene vigilar:
 | El analista olvidó su contraseña | No se puede recuperar: solo se guarda su huella | `npm run crear-clave -- analista` genera otra y reemplaza la anterior; reiniciar. |
 | Alguien legítimo recibe 429 al entrar | Falló 10 veces seguidas desde su IP | Esperar 5 minutos. Si pasa siempre, revisar `TRUST_PROXY` (todos compartirían IP). |
 | El histórico tiene huecos | El servidor estuvo apagado | El histórico no se puede reconstruir; mantener el servicio 24/7. |
+| `EADDRINUSE`: el puerto 8080 ya está en uso | Poli Clima ya está abierto en otra ventana, o lo usa otro programa | Con `iniciar.cmd`/`npm start` se resuelve solo (abre la copia existente o prueba otro puerto). Con `node server.mjs` directo: cierre la otra copia o cambie `PORT`. Para ver quién lo usa: `netstat -ano \| findstr :8080` y luego `tasklist /FI "PID eq <número>"`. |
 | Cambié `index.html` y no se nota | La página se lee una sola vez al arrancar | Reiniciar el servicio. |
 
 ## 7. Cuándo crecer

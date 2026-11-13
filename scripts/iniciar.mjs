@@ -10,7 +10,7 @@
 // directamente `node server.mjs`, como indica docs/OPERACION.md.
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -87,15 +87,19 @@ if (!node) {
 const versionTexto = node.version.join(".");
 dice(`  Usando Node ${versionTexto}${node.exe === process.execPath ? "" : `  (${node.exe})`}`);
 
-const args = [...(existsSync(join(raiz, ".env")) ? ["--env-file=.env"] : []), "server.mjs"];
-const hijo = spawn(node.exe, args, { cwd: raiz, stdio: ["inherit", "pipe", "pipe"], windowsHide: false });
+// ---------- Arranque del servidor ----------
+
+const archivoEnv = join(raiz, ".env");
+const textoEnv = existsSync(archivoEnv) ? readFileSync(archivoEnv, "utf8") : "";
+const args = [...(textoEnv ? ["--env-file=.env"] : []), "server.mjs"];
+
+// Si la persona fijó el puerto a propósito (variable PORT o línea PORT= en .env), se respeta: no se busca otro.
+const puertoElegido = process.env.PORT || /^\s*PORT\s*=\s*(\d+)/m.exec(textoEnv)?.[1];
+const PUERTO_BASE = Number(puertoElegido) || 8080;
+const MAX_PUERTOS_EXTRA = 10;
 
 // Ctrl+C llega a todo el grupo de procesos: el servidor se apaga solo; este lanzador solo espera a que termine.
 process.on("SIGINT", () => {});
-
-let url = null;
-let puertoOcupado = null;
-let nodeSinSqlite = false;
 
 function abrir(destino) {
   try {
@@ -105,53 +109,97 @@ function abrir(destino) {
   } catch { /* el usuario puede abrir la dirección a mano */ }
 }
 
-function procesarLinea(linea) {
-  console.log(linea);
-  let evento;
-  try { evento = JSON.parse(linea); } catch { return; }
-  if (evento.msg === "server_started" && !url) {
-    url = evento.url;
-    dice("");
-    dice(`  Listo: ${url}`);
-    dice("  Para detenerlo, cierre esta ventana o presione Ctrl+C.");
-    dice("");
-    if (abrirNavegador) { abrir(url); }
-  }
-  if (evento.msg === "auth_not_configured") {
-    dice("  El histórico para analistas está CERRADO porque aún no hay contraseña. Para abrirlo, en otra ventana:");
-    dice("      npm run crear-clave -- analista");
-    dice("  y vuelva a abrir este lanzador. (El clima de la página funciona igual sin esto.)");
-    dice("");
-  }
-  if (evento.msg === "server_error" && evento.code === "EADDRINUSE") { puertoOcupado = true; }
-  if (evento.msg === "startup_aborted" && /node:sqlite/.test(String(evento.reason))) { nodeSinSqlite = true; }
+/** ¿Lo que responde en ese puerto es otra copia de Poli Clima? (/api/sesion es pública y propia de esta aplicación) */
+async function esPoliClima(puerto) {
+  try {
+    const r = await fetch(`http://127.0.0.1:${puerto}/api/sesion`, { signal: AbortSignal.timeout(2_000) });
+    const cuerpo = await r.json();
+    return typeof cuerpo?.autenticado === "boolean";
+  } catch { return false; }
 }
 
-for (const flujo of [hijo.stdout, hijo.stderr]) {
-  let resto = "";
-  flujo.setEncoding("utf8");
-  flujo.on("data", (trozo) => {
-    resto += trozo;
-    let i;
-    while ((i = resto.indexOf("\n")) >= 0) { const l = resto.slice(0, i).trimEnd(); resto = resto.slice(i + 1); if (l) { procesarLinea(l); } }
+async function puertoOcupadoEn(puerto, intento) {
+  dice("");
+  if (await esPoliClima(puerto)) {
+    const destino = `http://localhost:${puerto}`;
+    dice(`  Poli Clima ya está funcionando en ${destino}. No hace falta abrirlo otra vez.`);
+    if (abrirNavegador) { dice("  Abriendo la página en el navegador…"); abrir(destino); }
+    dice("  Puede cerrar esta ventana.");
+    dice("");
+    process.exit(0);
+  }
+  if (!puertoElegido && intento < MAX_PUERTOS_EXTRA) {
+    dice(`  El puerto ${puerto} lo está usando otro programa. Probando con el ${puerto + 1}…`);
+    return arrancar(puerto + 1, intento + 1);
+  }
+  dice(`  El puerto ${puerto} lo está usando otro programa.`);
+  dice(puertoElegido
+    ? "  Cambie PORT en el archivo .env (o en la variable de entorno) por un puerto libre, por ejemplo 8081."
+    : `  No encontré un puerto libre entre ${PUERTO_BASE} y ${PUERTO_BASE + MAX_PUERTOS_EXTRA}. Cierre el programa que usa el ${PUERTO_BASE}.`);
+  dice(`  Para ver qué programa lo usa (en cmd):  netstat -ano | findstr :${puerto}`);
+  dice("");
+  process.exit(1);
+}
+
+function arrancar(puerto, intento) {
+  let url = null;
+  let puertoOcupado = false;
+  let nodeSinSqlite = false;
+
+  // En el primer intento el servidor decide su puerto (por defecto 8080 o el de .env); solo los siguientes lo fuerzan.
+  const env = intento > 0 ? { ...process.env, PORT: String(puerto) } : process.env;
+  const hijo = spawn(node.exe, args, { cwd: raiz, env, stdio: ["inherit", "pipe", "pipe"], windowsHide: false });
+
+  function procesarLinea(linea) {
+    let evento;
+    try { evento = JSON.parse(linea); } catch { evento = null; }
+    // El error "puerto ocupado" se explica abajo en español: no se muestra la línea técnica.
+    if (evento?.msg === "server_error" && evento.code === "EADDRINUSE") { puertoOcupado = true; return; }
+    console.log(linea);
+    if (!evento) { return; }
+    if (evento.msg === "server_started" && !url) {
+      url = evento.url;
+      dice("");
+      dice(`  Listo: ${url}`);
+      dice("  Para detenerlo, cierre esta ventana o presione Ctrl+C.");
+      dice("");
+      if (abrirNavegador) { abrir(url); }
+    }
+    if (evento.msg === "auth_not_configured") {
+      dice("  El histórico para analistas está CERRADO porque aún no hay contraseña. Para abrirlo, en otra ventana:");
+      dice("      npm run crear-clave -- analista");
+      dice("  y vuelva a abrir este lanzador. (El clima de la página funciona igual sin esto.)");
+      dice("");
+    }
+    if (evento.msg === "startup_aborted" && /node:sqlite/.test(String(evento.reason))) { nodeSinSqlite = true; }
+  }
+
+  for (const flujo of [hijo.stdout, hijo.stderr]) {
+    let resto = "";
+    flujo.setEncoding("utf8");
+    flujo.on("data", (trozo) => {
+      resto += trozo;
+      let i;
+      while ((i = resto.indexOf("\n")) >= 0) { const l = resto.slice(0, i).trimEnd(); resto = resto.slice(i + 1); if (l) { procesarLinea(l); } }
+    });
+    flujo.on("end", () => { if (resto.trim()) { procesarLinea(resto.trim()); } });
+  }
+
+  hijo.on("error", (e) => { dice(`  No se pudo iniciar el servidor: ${e.message}`); process.exit(1); });
+
+  hijo.on("exit", (codigo, senal) => {
+    if (codigo === 0 || senal === "SIGINT" || senal === "SIGTERM") { process.exit(0); }
+    if (puertoOcupado) { return puertoOcupadoEn(puerto, intento); }
+    dice("");
+    dice("  El servidor se detuvo con un error.");
+    if (nodeSinSqlite) {
+      dice("  Este Node no incluye node:sqlite. Instale Node 22.13 o superior.");
+    } else {
+      dice("  Lea la línea con \"level\":\"fatal\" más arriba: dice qué configuración o recurso falló.");
+    }
+    dice("");
+    process.exit(codigo ?? 1);
   });
-  flujo.on("end", () => { if (resto.trim()) { procesarLinea(resto.trim()); } });
 }
 
-hijo.on("error", (e) => { dice(`  No se pudo iniciar el servidor: ${e.message}`); process.exit(1); });
-
-hijo.on("exit", (codigo, senal) => {
-  if (codigo === 0 || senal === "SIGINT" || senal === "SIGTERM") { process.exit(0); }
-  dice("");
-  dice("  El servidor se detuvo con un error.");
-  if (puertoOcupado) {
-    dice("  El puerto ya está en uso: probablemente Poli Clima ya está abierto en otra ventana.");
-    dice("  Ciérrela, o use otro puerto (en Windows:  set PORT=8081  y vuelva a abrir el lanzador).");
-  } else if (nodeSinSqlite) {
-    dice("  Este Node no incluye node:sqlite. Instale Node 22.13 o superior.");
-  } else {
-    dice("  Lea la línea con \"level\":\"fatal\" más arriba: dice qué configuración o recurso falló.");
-  }
-  dice("");
-  process.exit(codigo ?? 1);
-});
+arrancar(PUERTO_BASE, 0);

@@ -23,6 +23,8 @@ node server.mjs                      # directo (requiere Node 22.13+; así se ej
 node --env-file=.env server.mjs      # con configuración en un archivo .env (copiar de .env.example)
 ```
 
+> **Puerto ocupado.** El lanzador lo resuelve solo: si en el puerto 8080 ya está Poli Clima, abre esa copia en el navegador; si lo usa otro programa, prueba con el 8081, 8082… Para fijar un puerto, ponga `PORT=8081` en el archivo `.env` (entonces ya no busca otro).
+
 > Si `node server.mjs` se cierra al instante, casi seguro el `node` predeterminado es anterior a 22.13: el servidor lo dice en una línea `"level":"fatal"`. Use `iniciar.cmd`, `npm start` o `nvm use 24`.
 
 El servidor empieza a guardar lecturas de inmediato (cada 5 minutos) aunque nadie abra la página. Al editar `index.html` hay que **reiniciar** el servidor: la página se lee una sola vez al arrancar (para calcular el hash de su script en la política de seguridad).
